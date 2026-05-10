@@ -1,0 +1,276 @@
+// /prisma/schema.prisma
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PRO
+  AGENCY
+}
+
+enum Niche {
+  PSYCHOLOGY
+  FITNESS
+  FINANCE
+  TECH
+  LIFESTYLE
+  COMEDY
+  EDUCATION
+  GAMING
+  BEAUTY
+  MOTIVATION
+  TRUE_CRIME
+  OTHER
+}
+
+enum Platform {
+  YOUTUBE
+  TIKTOK
+  REELS
+  SHORTS
+  PODCAST
+}
+
+enum Tone {
+  EDUCATIONAL
+  ENTERTAINING
+  MOTIVATIONAL
+  SHOCKING
+  HUMOROUS
+  EMOTIONAL
+}
+
+enum AgeRange {
+  TEEN
+  YOUNG_ADULT
+  ADULT
+  SENIOR
+}
+
+enum ScriptLength {
+  SHORT
+  MEDIUM
+  LONG
+}
+
+enum HookType {
+  QUESTION
+  STATISTIC
+  STORY
+  CONTROVERSY
+  FEAR
+  CURIOSITY
+  REVELATION
+  RELATABILITY
+  BOLD_CLAIM
+  PATTERN_INTERRUPT
+}
+
+enum WorkspaceRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  TRIALING
+}
+
+enum NotificationType {
+  PLAN_UPGRADE
+  USAGE_LIMIT
+  NEW_FEATURE
+  PAYMENT_FAILED
+  WELCOME
+  GENERAL
+}
+
+model User {
+  id                     String    @id @default(uuid())
+  email                  String    @unique
+  password               String
+  name                   String
+  avatarUrl              String?
+  role                   Role      @default(USER)
+  plan                   Plan      @default(FREE)
+  planExpiresAt          DateTime?
+  stripeCustomerId       String?
+  stripeSubscriptionId   String?
+  isEmailVerified        Boolean   @default(false)
+  emailVerificationToken String?
+  passwordResetToken     String?
+  passwordResetExpiresAt DateTime?
+  lastLoginAt            DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  profile          Profile?
+  voiceProfile     VoiceProfile?
+  scripts          Script[]
+  hooks            Hook[]
+  workspacesOwned  Workspace[]
+  workspaceMembers WorkspaceMember[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+  usageStats       UsageStat[]
+  subscription     Subscription?
+}
+
+model Profile {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  niche               Niche    @default(OTHER)
+  platforms           String   // Stored as JSON string or comma-separated for SQLite
+  audienceAgeRange    AgeRange @default(ADULT)
+  preferredTone       Tone     @default(EDUCATIONAL)
+  voiceSamples        String   // JSON string of past scripts
+  onboardingCompleted Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model VoiceProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vocabularyLevel String
+  toneSignature   String
+  commonPhrases   String   // JSON string
+  slangStyle      String
+  wordsToAvoid    String   // JSON string
+  customPhrases   String   // JSON string
+  analysisRaw     String   // Store as JSON string in SQLite
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Script {
+  id              String       @id @default(uuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId     String?
+  workspace       Workspace?   @relation(fields: [workspaceId], references: [id])
+  title           String
+  topic           String
+  platform        Platform
+  niche           Niche
+  tone            Tone
+  scriptLength    ScriptLength
+  psychTriggers   String       // JSON string
+  audienceAge     AgeRange
+  usedVoiceProfile Boolean      @default(false)
+  fullScript      String       // JSON string
+  hookVariations  String       // JSON string
+  retentionArc    String       // JSON string
+  metadata        String       // JSON string
+  hookScore       Float
+  viralScore      Float
+  isFavorite      Boolean      @default(false)
+  isPublic        Boolean      @default(false)
+  viewCount       Int          @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model Hook {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scriptId      String?
+  text          String
+  hookType      HookType
+  platform      Platform
+  strengthScore Float
+  topic         String
+  isFavorite    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+}
+
+model Workspace {
+  id        String            @id @default(uuid())
+  name      String
+  ownerId   String
+  owner     User              @relation(fields: [ownerId], references: [id])
+  plan      Plan              @default(FREE)
+  logoUrl   String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  members   WorkspaceMember[]
+  scripts   Script[]
+}
+
+model WorkspaceMember {
+  id          String        @id @default(uuid())
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        WorkspaceRole @default(VIEWER)
+  invitedAt   DateTime      @default(now())
+  joinedAt    DateTime?
+}
+
+model Subscription {
+  id                   String             @id @default(uuid())
+  userId               String             @unique
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeSubscriptionId String             @unique
+  stripePriceId        String
+  plan                 Plan
+  status               SubscriptionStatus
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+}
+
+model UsageStat {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  month            String   // "2025-01"
+  scriptsGenerated Int      @default(0)
+  hooksGenerated   Int      @default(0)
+  titlesGenerated  Int      @default(0)
+  aiTokensUsed     Int      @default(0)
+  updatedAt        DateTime @updatedAt
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType @default(GENERAL)
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  metadata   String   // JSON string
+  ipAddress  String
+  userAgent  String
+  createdAt  DateTime @default(now())
+}
